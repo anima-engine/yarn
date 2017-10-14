@@ -14,16 +14,14 @@ pub enum GeometryData {
 }
 
 impl Tie for GeometryData {
-    fn tie(self, yarn: &mut Yarn) -> usize {
-        yarn.tie_block(
-            Block(BlockInner::GeometryData(self))
-        )
+    fn into_block(self, _: &mut Yarn) -> Block {
+        Block(BlockInner::GeometryData(self))
     }
 
-    fn untie(yarn: &mut Yarn) -> Option<GeometryData> {
-        match yarn.untie_block() {
-            Some(Block(BlockInner::GeometryData(data))) => Some(data),
-            _ => None
+    fn from_block(block: Block, _: &mut Yarn) -> Option<Self> {
+        match block {
+            Block(BlockInner::GeometryData(data)) => Some(data),
+            _ => unreachable!()
         }
     }
 }

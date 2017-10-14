@@ -4,23 +4,43 @@ use std::rc::Rc;
 
 use bincode;
 
-use super::block::{Block, BlockInner};
+use super::block::Block;
 use super::geometry::GeometryData;
+use super::object::Object;
 use super::yarn_container::YarnContainer;
 
 macro_rules! match_block {
-    ( $slf:ident, $rc:expr, $ptr:expr, $index:expr, $( $id:ident : $typ:ty => $block:expr ),* ) => {
-        $(
-            if let Ok(rc) = $rc.downcast::<$typ>() {
+    ( $slf:ident, $rc:expr, $ptr:expr, $index:expr, [ $typ:ty ] ) => {
+        match $rc.downcast::<$typ>() {
+            Ok(rc) => {
                 match Rc::try_unwrap(rc) {
-                    Ok($id) => {
-                        $slf.blocks.insert($index, Some($block));
+                    Ok(tie) => {
+                        // TODO: fix when NLLs
+                        let block = Some(tie.into_block($slf));
+                        $slf.blocks.insert($index, block);
                         $slf.indices.remove($ptr).unwrap();
                     }
                     Err(_) => ()
                 };
             }
-        )*
+            _ => ()
+        };
+    };
+    ( $slf:ident, $rc:expr, $ptr:expr, $index:expr, [ $typ:ty, $( $typs:ty ),* ] ) => {
+        match $rc.downcast::<$typ>() {
+            Ok(rc) => {
+                match Rc::try_unwrap(rc) {
+                    Ok(tie) => {
+                        // TODO: fix when NLLs
+                        let block = Some(tie.into_block($slf));
+                        $slf.blocks.insert($index, block);
+                        $slf.indices.remove($ptr).unwrap();
+                    }
+                    Err(_) => ()
+                };
+            }
+            Err(rc) => match_block!($slf, rc, $ptr, $index, [ $( $typs ),* ])
+        };
     };
 }
 
@@ -82,12 +102,14 @@ impl Yarn {
     pub(super) fn tie_rc(&mut self, rc: Rc<Any>) -> usize {
         let ptr = &*rc as *const Any as *const ();
 
+        // TODO: fix when NLLs
         if self.indices.contains_key(&ptr) {
             let index = *self.indices.get(&ptr).unwrap();
 
-            match_block!(self, rc, &ptr, index,
-                geometry: GeometryData => Block(BlockInner::GeometryData(geometry))
-            );
+            match_block!(self, rc, &ptr, index, [
+                GeometryData,
+                Object
+            ]);
 
             index
         } else {
@@ -101,6 +123,7 @@ impl Yarn {
     }
 
     pub(super) fn untie_rc(&mut self, index: usize) -> Option<Rc<Any>> {
+        // TODO: fix when NLLs
         if self.rcs.contains_key(&index) {
             self.rcs.get(&index).map(|rc| rc.clone())
         } else {
@@ -119,6 +142,21 @@ impl Yarn {
 }
 
 pub trait Tie: Sized {
-    fn tie(self, yarn: &mut Yarn) -> usize;
-    fn untie(yarn: &mut Yarn) -> Option<Self>;
+    fn into_block(self, yarn: &mut Yarn) -> Block;
+    fn from_block(block: Block, yarn: &mut Yarn) -> Option<Self>;
+
+    fn tie(self, yarn: &mut Yarn) -> usize {
+        // TODO: fix when NLLs
+        let block = self.into_block(yarn);
+        yarn.tie_block(block)
+    }
+
+    fn untie(yarn: &mut Yarn) -> Option<Self> {
+        // TODO: fix when NLLs
+        let block = yarn.untie_block();
+        match block {
+            Some(block) => Tie::from_block(block, yarn),
+            _ => None
+        }
+    }
 }

@@ -15,22 +15,24 @@ pub(super) struct BlockObject {
 }
 
 impl Tie for Object {
-    fn tie(self, yarn: &mut Yarn) -> usize {
+    fn into_block(self, yarn: &mut Yarn) -> Block {
         let geometry_index = yarn.tie_rc(self.geometry);
 
-        yarn.tie_block(
-            Block(BlockInner::Object(
-                BlockObject { geometry_index }
-            ))
-        )
+        Block(BlockInner::Object(
+            BlockObject { geometry_index }
+        ))
     }
 
-    fn untie(yarn: &mut Yarn) -> Option<Object> {
-        match yarn.untie_block() {
-            Some(Block(BlockInner::Object(BlockObject { geometry_index }))) => {
-                Some(Object { geometry: yarn.untie_rc(geometry_index)?.downcast().unwrap() })
+    fn from_block(block: Block, yarn: &mut Yarn) -> Option<Self> {
+        match block {
+            Block(BlockInner::Object(BlockObject { geometry_index })) => {
+                Some(
+                    Object {
+                        geometry: yarn.untie_rc(geometry_index)?.downcast().unwrap()
+                    }
+                )
             }
-            _ => None
+            _ => unreachable!()
         }
     }
 }
