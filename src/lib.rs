@@ -1,3 +1,5 @@
+#![feature(rc_downcast)]
+
 extern crate bincode;
 extern crate brotli2;
 #[macro_use]

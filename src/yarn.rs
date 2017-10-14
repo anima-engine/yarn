@@ -1,15 +1,33 @@
+use std::any::Any;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
 use bincode;
 
-use super::block::Block;
+use super::block::{Block, BlockInner};
+use super::geometry::GeometryData;
 use super::yarn_container::YarnContainer;
+
+macro_rules! match_block {
+    ( $slf:ident, $rc:expr, $ptr:expr, $index:expr, $( $id:ident : $typ:ty => $block:expr ),* ) => {
+        $(
+            if let Ok(rc) = $rc.downcast::<$typ>() {
+                match Rc::try_unwrap(rc) {
+                    Ok($id) => {
+                        $slf.blocks.insert($index, Some($block));
+                        $slf.indices.remove($ptr).unwrap();
+                    }
+                    Err(_) => ()
+                };
+            }
+        )*
+    };
+}
 
 pub struct Yarn {
     blocks: VecDeque<Option<Block>>,
-    rcs: HashMap<usize, Rc<Block>>,
-    indices: HashMap<*const Block, usize>
+    rcs: HashMap<usize, Rc<Any>>,
+    indices: HashMap<*const (), usize>
 }
 
 impl Yarn {
@@ -61,19 +79,15 @@ impl Yarn {
         self.blocks.pop_front().unwrap()
     }
 
-    pub(super) fn tie_rc(&mut self, rc: Rc<Block>) -> usize {
-        let ptr = &*rc as *const Block;
+    pub(super) fn tie_rc(&mut self, rc: Rc<Any>) -> usize {
+        let ptr = &*rc as *const Any as *const ();
 
         if self.indices.contains_key(&ptr) {
             let index = *self.indices.get(&ptr).unwrap();
 
-            match Rc::try_unwrap(rc) {
-                Ok(block) => {
-                    self.blocks.insert(index, Some(block));
-                    self.indices.remove(&ptr).unwrap();
-                }
-                Err(_) => ()
-            };
+            match_block!(self, rc, &ptr, index,
+                geometry: GeometryData => Block(BlockInner::GeometryData(geometry))
+            );
 
             index
         } else {
@@ -86,7 +100,7 @@ impl Yarn {
         }
     }
 
-    pub(super) fn untie_rc(&mut self, index: usize) -> Option<Rc<Block>> {
+    pub(super) fn untie_rc(&mut self, index: usize) -> Option<Rc<Any>> {
         if self.rcs.contains_key(&index) {
             self.rcs.get(&index).map(|rc| rc.clone())
         } else {

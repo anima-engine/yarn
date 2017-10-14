@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use super::block::{Block, BlockInner};
+use super::geometry::GeometryData;
 use super::yarn::{Tie, Yarn};
 
 #[derive(Debug)]
 pub struct Object {
-    geometry: Rc<Block>
+    geometry: Rc<GeometryData>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -27,7 +28,7 @@ impl Tie for Object {
     fn untie(yarn: &mut Yarn) -> Option<Object> {
         match yarn.untie_block() {
             Some(Block(BlockInner::Object(BlockObject { geometry_index }))) => {
-                Some(Object { geometry: yarn.untie_rc(geometry_index)? })
+                Some(Object { geometry: yarn.untie_rc(geometry_index)?.downcast().unwrap() })
             }
             _ => None
         }
