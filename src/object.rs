@@ -6,7 +6,7 @@ use super::yarn::{Tie, Yarn};
 
 #[derive(Debug)]
 pub struct Object {
-    geometry: Rc<GeometryData>
+    pub geometry: Rc<GeometryData>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -16,6 +16,8 @@ pub(super) struct BlockObject {
 
 impl Tie for Object {
     fn into_block(self, yarn: &mut Yarn) -> Block {
+        yarn.allocate_block();
+
         let geometry_index = yarn.tie_rc(self.geometry);
 
         Block(BlockInner::Object(

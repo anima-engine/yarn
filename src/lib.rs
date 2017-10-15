@@ -10,4 +10,3 @@ pub mod geometry;
 pub mod material;
 pub mod object;
 pub mod yarn;
-pub mod yarn_container;
