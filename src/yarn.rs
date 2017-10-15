@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::str;
@@ -138,6 +138,16 @@ impl Yarn {
         }
     }
 
+    pub fn tied_type_id(&self) -> Option<TypeId> {
+        let block = self.blocks.iter().find(|option| option.is_some())?;
+
+        match *block {
+            Some(Block(BlockInner::GeometryData(_))) => Some(TypeId::of::<GeometryData>()),
+            Some(Block(BlockInner::Object(_))) => Some(TypeId::of::<Object>()),
+            None => None
+        }
+    }
+
     pub(super) fn allocate_block(&mut self) {
         // TODO: fix when NLLs
         let index = self.blocks.len();
@@ -212,7 +222,7 @@ impl Yarn {
     }
 }
 
-pub trait Tie: Sized {
+pub trait Tie: Sized + 'static {
     fn into_block(self, yarn: &mut Yarn) -> Block;
     fn from_block(block: Block, yarn: &mut Yarn) -> Option<Self>;
 
@@ -223,6 +233,10 @@ pub trait Tie: Sized {
     }
 
     fn untie(yarn: &mut Yarn) -> Option<Self> {
+        if yarn.tied_type_id()? != TypeId::of::<Self>() {
+            return None;
+        }
+
         // TODO: fix when NLLs
         let block = yarn.untie_block();
         match block {

@@ -28,9 +28,10 @@ impl Tie for Object {
     fn from_block(block: Block, yarn: &mut Yarn) -> Option<Self> {
         match block {
             Block(BlockInner::Object(BlockObject { geometry_index })) => {
+                let rc = yarn.untie_rc(geometry_index)?;
                 Some(
                     Object {
-                        geometry: yarn.untie_rc(geometry_index)?.downcast().unwrap()
+                        geometry: rc.downcast().ok()?
                     }
                 )
             }
