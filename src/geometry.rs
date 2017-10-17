@@ -28,9 +28,9 @@ impl Tie for GeometryData {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Geometry {
-    vertices: Vec<f32>,
-    uvs: Vec<f32>,
-    indices: Vec<usize>
+    vertices: Vec<(f32, f32, f32)>,
+    uvs: Vec<(f32, f32)>,
+    indices: Vec<(usize, usize)>
 }
 
 impl Geometry {
@@ -42,6 +42,21 @@ impl Geometry {
         compressor.read_to_end(&mut data).unwrap();
 
         GeometryCompressed { data }
+    }
+
+    pub fn expand(&self) -> GeometryExpanded {
+        let mut vertices = vec![];
+        let mut uvs = vec![];
+
+        for &(i, j) in &self.indices {
+            vertices.push(self.vertices[i]);
+            uvs.push(self.uvs[j]);
+        }
+
+        GeometryExpanded {
+            vertices,
+            uvs
+        }
     }
 }
 
@@ -63,8 +78,34 @@ impl GeometryCompressed {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GeometryExpanded {
-    pub vertices: Vec<f32>,
-    pub uvs: Vec<f32>
+    pub vertices: Vec<(f32, f32, f32)>,
+    pub uvs: Vec<(f32, f32)>
+}
+
+impl GeometryExpanded {
+    pub fn condense(&self) -> Geometry {
+        let mut vertices: Vec<_> = self.vertices.clone();
+        let mut uvs: Vec<_> = self.uvs.clone();
+
+        vertices.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        vertices.dedup_by(|a, b| a.eq(&b));
+
+        uvs.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        uvs.dedup_by(|a, b| a.eq(&b));
+
+        let indices = self.vertices.iter().zip(self.uvs.iter()).map(|(vertex, uv)| {
+            let i = vertices.binary_search_by(|probe| probe.partial_cmp(vertex).unwrap()).unwrap();
+            let j = uvs.binary_search_by(|probe| probe.partial_cmp(uv).unwrap()).unwrap();
+
+            (i, j)
+        }).collect();
+
+        Geometry {
+            vertices,
+            uvs,
+            indices
+        }
+    }
 }
 
 #[cfg(test)]
@@ -74,9 +115,9 @@ mod tests {
     #[test]
     fn compress_decompress() {
         let geometry = Geometry {
-            vertices: vec![1.0; 10],
-            uvs: vec![0.0; 6],
-            indices: vec![2; 16]
+            vertices: vec![(1.0, 2.0, 3.0); 10],
+            uvs: vec![(0.0, 1.0); 6],
+            indices: vec![(1, 2); 16]
         };
 
         let compressed = geometry.compress();
@@ -85,5 +126,23 @@ mod tests {
         assert_eq!(new_geometry.vertices, geometry.vertices);
         assert_eq!(new_geometry.uvs, geometry.uvs);
         assert_eq!(new_geometry.indices, geometry.indices);
+    }
+
+    #[test]
+    fn condense_expand() {
+        let expanded = GeometryExpanded {
+            vertices: vec![(1.0, 2.0, 3.0); 3],
+            uvs: vec![(0.0, 1.0); 3]
+        };
+
+        let geometry = expanded.condense();
+        let new_expanded = geometry.expand();
+
+        assert_eq!(new_expanded.vertices, expanded.vertices);
+        assert_eq!(new_expanded.uvs, expanded.uvs);
+
+        assert_eq!(geometry.vertices.len(), 1);
+        assert_eq!(geometry.uvs.len(), 1);
+        assert_eq!(geometry.indices, vec![(0, 0), (0, 0), (0, 0)]);
     }
 }
