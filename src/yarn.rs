@@ -28,13 +28,13 @@ macro_rules! match_block {
                             $slf.indices.remove($ptr).unwrap();
                         }
                     }
-                    Err(_) => ()
+                    Err(rc) => {
+                        $slf.blocks.push_back(None);
+                        $slf.rcs.insert($index, rc);
+                    }
                 };
             }
-            Err(rc) => {
-                $slf.blocks.push_back(None);
-                $slf.rcs.insert($index, rc);
-            }
+            Err(_) => unreachable!()
         };
     };
     ( $slf:ident, $rc:expr, $ptr:expr, $index:expr, [ $typ:ty, $( $typs:ty ),* ] ) => {
@@ -55,7 +55,10 @@ macro_rules! match_block {
                             $slf.indices.remove($ptr).unwrap();
                         }
                     }
-                    Err(_) => ()
+                    Err(rc) => {
+                        $slf.blocks.push_back(None);
+                        $slf.rcs.insert($index, rc);
+                    }
                 };
             }
             Err(rc) => match_block!($slf, rc, $ptr, $index, [ $( $typs ),* ])
@@ -184,7 +187,7 @@ impl Yarn {
             *self.indices.get(&ptr).unwrap()
         } else {
             self.blocks.len()
-        };
+        };println!("tie: {}", index);
 
         match_block!(self, rc, &ptr, index, [
             GeometryData,
@@ -245,3 +248,4 @@ pub trait Tie: Sized + 'static {
         }
     }
 }
+

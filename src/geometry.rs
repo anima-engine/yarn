@@ -34,6 +34,44 @@ pub struct Geometry {
 }
 
 impl Geometry {
+    pub fn new(
+        vertices: Vec<(f32, f32, f32)>,
+        uvs: Vec<(f32, f32)>,
+        indices: Vec<(usize, usize)>
+    ) -> Option<Geometry> {
+        if vertices.iter().any(|&(x, y, z)| !x.is_finite() || !y.is_finite() || !z.is_finite()) {
+            return None;
+        }
+
+        if uvs.iter().any(|&(u, v)| !u.is_finite() || !v.is_finite()) {
+            return None;
+        }
+
+        if indices.iter().any(|&(i, j)| i >= vertices.len() || j >= uvs.len()) {
+            return None;
+        }
+
+        Some(
+            Geometry {
+                vertices,
+                uvs,
+                indices
+            }
+        )
+    }
+
+    pub fn vertices(&self) -> &[(f32, f32, f32)] {
+        &self.vertices[..]
+    }
+
+    pub fn uvs(&self) -> &[(f32, f32)] {
+        &self.uvs[..]
+    }
+
+    pub fn indices(&self) -> &[(usize, usize)] {
+        &self.indices[..]
+    }
+
     pub fn compress(&self) -> GeometryCompressed {
         let encoded: Vec<u8> = bincode::serialize(&self, bincode::Infinite).unwrap();
         let mut data = vec![];
@@ -78,11 +116,43 @@ impl GeometryCompressed {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GeometryExpanded {
-    pub vertices: Vec<(f32, f32, f32)>,
-    pub uvs: Vec<(f32, f32)>
+    vertices: Vec<(f32, f32, f32)>,
+    uvs: Vec<(f32, f32)>
 }
 
 impl GeometryExpanded {
+    pub fn new(
+        vertices: Vec<(f32, f32, f32)>,
+        uvs: Vec<(f32, f32)>
+    ) -> Option<GeometryExpanded> {
+        if vertices.len() != uvs.len() {
+            return None;
+        }
+
+        if vertices.iter().any(|&(x, y, z)| !x.is_finite() || !y.is_finite() || !z.is_finite()) {
+            return None;
+        }
+
+        if uvs.iter().any(|&(u, v)| !u.is_finite() || !v.is_finite()) {
+            return None;
+        }
+
+        Some(
+            GeometryExpanded {
+                vertices,
+                uvs
+            }
+        )
+    }
+
+    pub fn vertices(&self) -> &[(f32, f32, f32)] {
+        &self.vertices[..]
+    }
+
+    pub fn uvs(&self) -> &[(f32, f32)] {
+        &self.uvs[..]
+    }
+
     pub fn condense(&self) -> Geometry {
         let mut vertices: Vec<_> = self.vertices.clone();
         let mut uvs: Vec<_> = self.uvs.clone();
