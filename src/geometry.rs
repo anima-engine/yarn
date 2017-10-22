@@ -180,7 +180,65 @@ impl GeometryExpanded {
 
 #[cfg(test)]
 mod tests {
+    use std::f32;
+
     use super::*;
+
+    #[test]
+    fn new_geometry_nan() {
+        let vertices_nan = Geometry::new(vec![(f32::NAN, 1.0, 2.0)], vec![], vec![]);
+        let uvs_nan = Geometry::new(vec![], vec![(1.0, f32::NAN)], vec![]);
+
+        assert!(vertices_nan.is_none());
+        assert!(uvs_nan.is_none());
+    }
+
+    #[test]
+    fn new_geometry_index_oob() {
+        let oob = Geometry::new(vec![], vec![], vec![(0, 0)]);
+
+        assert!(oob.is_none());
+    }
+
+    #[test]
+    fn geometry_getters() {
+        let geometry = Geometry {
+            vertices: vec![(1.0, 2.0, 3.0); 10],
+            uvs: vec![(0.0, 1.0); 6],
+            indices: vec![(1, 2); 16]
+        };
+
+        assert_eq!(geometry.vertices(), &geometry.vertices[..]);
+        assert_eq!(geometry.uvs(), &geometry.uvs[..]);
+        assert_eq!(geometry.indices(), &geometry.indices[..]);
+    }
+
+    #[test]
+    fn new_geometry_expanded_nan() {
+        let vertices_nan = GeometryExpanded::new(vec![(f32::NAN, 1.0, 2.0)], vec![(1.0, 2.0)]);
+        let uvs_nan = GeometryExpanded::new(vec![(0.0, 1.0, 2.0)], vec![(1.0, f32::NAN)]);
+
+        assert!(vertices_nan.is_none());
+        assert!(uvs_nan.is_none());
+    }
+
+    #[test]
+    fn new_geometry_expanded_different_lengths() {
+        let different_lengths = GeometryExpanded::new(vec![(0.0, 1.0, 2.0)], vec![]);
+
+        assert!(different_lengths.is_none());
+    }
+
+    #[test]
+    fn geometry_expanded_getters() {
+        let geometry = GeometryExpanded {
+            vertices: vec![(1.0, 2.0, 3.0); 10],
+            uvs: vec![(0.0, 1.0); 10]
+        };
+
+        assert_eq!(geometry.vertices(), &geometry.vertices[..]);
+        assert_eq!(geometry.uvs(), &geometry.uvs[..]);
+    }
 
     #[test]
     fn compress_decompress() {
@@ -214,5 +272,29 @@ mod tests {
         assert_eq!(geometry.vertices.len(), 1);
         assert_eq!(geometry.uvs.len(), 1);
         assert_eq!(geometry.indices, vec![(0, 0), (0, 0), (0, 0)]);
+    }
+
+    #[test]
+    fn tie_untie() {
+        let geometry = GeometryData::Geometry(
+            Geometry::new(
+                vec![(1.0, 2.0, 3.0); 10],
+                vec![(0.0, 1.0); 6],
+                vec![(1, 2); 16]
+            ).unwrap()
+        );
+
+        let mut yarn = Yarn::new();
+
+        geometry.tie(&mut yarn);
+
+        let geometry = GeometryData::untie(&mut yarn).unwrap();
+
+        match geometry {
+            GeometryData::Geometry(ref geometry) => {
+                assert_eq!(geometry.vertices(), &[(1.0, 2.0, 3.0); 10]);
+            }
+            _ => unreachable!()
+        }
     }
 }

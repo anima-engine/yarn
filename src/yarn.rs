@@ -29,8 +29,11 @@ macro_rules! match_block {
                         }
                     }
                     Err(rc) => {
-                        $slf.blocks.push_back(None);
-                        $slf.rcs.insert($index, rc);
+                        if !$slf.indices.contains_key($ptr) {
+                            $slf.blocks.push_back(None);
+                            $slf.indices.insert(*$ptr, $index);
+                            $slf.rcs.insert($index, rc);
+                        }
                     }
                 };
             }
@@ -56,8 +59,11 @@ macro_rules! match_block {
                         }
                     }
                     Err(rc) => {
-                        $slf.blocks.push_back(None);
-                        $slf.rcs.insert($index, rc);
+                        if !$slf.indices.contains_key($ptr) {
+                            $slf.blocks.push_back(None);
+                            $slf.indices.insert(*$ptr, $index);
+                            $slf.rcs.insert($index, rc);
+                        }
                     }
                 };
             }
@@ -179,15 +185,17 @@ impl Yarn {
         Some(option.take().unwrap())
     }
 
-    pub(super) fn tie_rc(&mut self, rc: Rc<Any>) -> usize {
+    pub(super) fn tie_rc(&mut self, mut rc: Rc<Any>) -> usize {
         let ptr = &*rc as *const Any as *const ();
 
         // TODO: fix when NLLs
         let index = if self.indices.contains_key(&ptr) {
-            *self.indices.get(&ptr).unwrap()
+            let index = *self.indices.get(&ptr).unwrap();
+            rc = self.rcs.remove(&index).unwrap();
+            index
         } else {
             self.blocks.len()
-        };println!("tie: {}", index);
+        };
 
         match_block!(self, rc, &ptr, index, [
             GeometryData,
@@ -249,3 +257,55 @@ pub trait Tie: Sized + 'static {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::*;
+    use super::super::geometry::Geometry;
+    use super::super::object::Object;
+    use super::super::yarn::{Tie, Yarn};
+
+    #[test]
+    fn bytes() {
+        let geometry = Rc::new(
+            GeometryData::Geometry(
+                Geometry::new(
+                    vec![(1.0, 2.0, 3.0); 10],
+                    vec![(0.0, 1.0); 6],
+                    vec![(1, 2); 16]
+                ).unwrap()
+            )
+        );
+        let object1 = Object::new(geometry.clone());
+        let object2 = Object::new(geometry);
+
+        let mut yarn = Yarn::new();
+
+        object1.tie(&mut yarn);
+        object2.tie(&mut yarn);
+
+        let mut yarn = Yarn::from_bytes(&yarn.into_bytes().unwrap()).unwrap();
+
+        let object1 = Object::untie(&mut yarn).unwrap();
+        let object2 = Object::untie(&mut yarn).unwrap();
+
+        match *object1.geometry() {
+            GeometryData::Geometry(ref geometry) => {
+                assert_eq!(geometry.vertices(), &[(1.0, 2.0, 3.0); 10]);
+            }
+            _ => unreachable!()
+        }
+        match *object2.geometry() {
+            GeometryData::Geometry(ref geometry) => {
+                assert_eq!(geometry.vertices(), &[(1.0, 2.0, 3.0); 10]);
+            }
+            _ => unreachable!()
+        }
+
+        assert_eq!(
+            object1.geometry() as *const GeometryData,
+            object2.geometry() as *const GeometryData
+        );
+    }
+}
